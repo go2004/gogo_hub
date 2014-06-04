@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<persons>
+<person name="polaris" age="28">
+<career>无业游民</career>
+<interests>
+<interest>编程</interest>
+<interest>下棋</interest>
+</interests>
+</person>
+<person name="studygolang" age="27">
+<career>码农</career>
+<interests>
+<interest>编程</interest>
+<interest>下棋</interest>
+</interests>
+</person>
+</persons>
