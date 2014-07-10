@@ -2,12 +2,12 @@ package main
 
 import (
 	"database/sql"    //这包一定要引用
-	"fmt"    //这个前面一章讲过
+	//"fmt"    //这个前面一章讲过
 	_"mysql"
 	//	"strconv" //这个是为了把int转换为string
 	"log"
 	"time"
-	//	"os"
+	"fmt"
 	"common"
 )
 
@@ -24,7 +24,7 @@ func DbInit() (*DbMysql, error) {
 	hostIP := common.GetElement("MySQL", "HostIP", "127.0.0.1");
 	port := common.GetElement("MySQL", "Port", "3306");
 	user := common.GetElement("MySQL", "User", "root");
-	pwd := common.GetElement("MySQL", "Pwd", "1234");
+	pwd := common.GetElement("MySQL", "Pwd", "123");
 	dbName := common.GetElement("MySQL", "DbName", "");
 
 	DbConn, err := dbInit(hostIP, port, user, pwd, dbName);
@@ -41,18 +41,19 @@ func dbInit(hostIP, port, user, pwd, dbname string) (*DbMysql, error) {
 	//第二个参数 : 数据库DSN配置。Go中没有统一DSN,都是数据库引擎自己定义的，因此不同引擎可能配置不同
 	//本次演示采用http://code.google.com/p/go-mysql-driver
 	if err != nil {
-		log.Println("database initialize error : ", err.Error());
+		LogInfo("database initialize error : ", err.Error());
 		return nil, err;
 	}
+	//fmt.Println( " db = ",db, "err = ",err)
 	mydb.db = db;
 	mydb.url = url;
 	mydb.state = true;
 	mydb.opFlag = make(chan uint8);
 	mydb.querychannel = make(chan string, SqlChannelSize);
 	//自检功能
-	go DbPing(mydb);
+	//go DbPing(mydb);
 
-	log.Println("database initialize succes.... ");
+	LogInfo("database initialize succes.... ");
 	return mydb, nil
 }
 func DbClose(mydb *DbMysql) {
@@ -78,7 +79,7 @@ func DbPing(mydb *DbMysql) {
 				mydb.state = true;
 				continue;
 			}
-			log.Println("database initialize error : ", err.Error());
+			LogInfo("database initialize error : ", err.Error());
 			continue;
 		}
 
@@ -102,7 +103,7 @@ func DbPing(mydb *DbMysql) {
 			}
 		}
 	}
-	log.Println("database is quit......");
+	LogInfo("database is quit......");
 }
 
 //Exec executes a query  returning any rows.
@@ -118,10 +119,10 @@ func (mydb *DbMysql) Prepare(query string) {
 	defer stmt.Close();
 	if result, err := stmt.Exec(); err == nil {
 		if c, err := result.RowsAffected(); err == nil {
-			log.Println(query, ", update count : ", c);
+			LogInfo(query, ", update count : ", c);
 		}
 	}else {
-		log.Println("err = ", err, "\n", result)
+		LogInfo("err = ", err, "\n", result)
 	}
 }
 
@@ -132,7 +133,7 @@ func (mydb *DbMysql) Exec(query string) {
 	}
 	_, err := mydb.db.Exec(query);
 	if err != nil {
-		log.Println("Query = ", query, " : ", err.Error());
+		LogInfo("Query = ", query, " : ", err.Error());
 		return;
 	}
 }
@@ -168,3 +169,30 @@ mydb.Exec("call p3(2)");
 opFlag := <-mydb.opFlag;
 }
   */
+
+func (mydb *DbMysql) CmdLoginDbCheck(username string, pwd string) (code bool) {
+	code = false;
+
+	if mydb.db == nil || !mydb.state {return; }
+	rows, err := mydb.db.Query("SELECT `name`,old from player  WHERE id = 3")
+	//	fmt.Println("CmdLoginDbCheck 1 ",err, " rows = ",rows)
+	if (err != nil || rows == nil) {
+		rows.Close()
+		return code
+	}
+
+	//	fmt.Println("CmdLoginDbCheck 2")
+	var name string;
+	var age int;
+	if !rows.Next() {
+		return code
+	}
+
+	if err := rows.Scan(&name, &age); err == nil {
+		code = (name == username)
+	}
+	//fmt.Println("CmdLoginDbCheck name = ", name, " age = ", age, " username=", username, ",code=", code)
+	rows.Close()
+	return code
+}
+

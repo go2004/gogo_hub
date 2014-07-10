@@ -13,7 +13,7 @@ import (
 	"io"
 	"os"
 	"unicode"
-	"logger"
+	"log"
 )
 
 const (
@@ -177,13 +177,13 @@ func NewDecoder(r io.Reader) *Decoder {
 func LoadConfig(configFile string) {
 	file, err := os.Open(configFile);
 	if nil != err {
-		logger.Error("ConfigFile loading is failure ", err);
+		log.Printf("ConfigFile loading is failure ", err);
 		os.Exit(1)
 	}
 	defer file.Close();
 
 	config = NewDecoder(file);
-	logger.Info("ConfigFile(", configFile, ") loading is succes ");
+	log.Printf("ConfigFile(%s) loading is succes ", configFile);
 }
 
 //hostIP := common.GetElement("MySQL", "HostIP","127.0.0.1");

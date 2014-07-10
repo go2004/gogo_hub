@@ -9,143 +9,102 @@ package main
 
 import (
 	"flag"
-	//	"fmt"
+	"fmt"
 	"os"
-	"bufio"
 	"time"
 	"runtime"
-	"runtime/pprof"
-	//	"log"
-	//	"timerstats"
-	"common"
-	"logger"
+	"log"
 )
 
 var (
-	ipPort     = flag.String("i", "127.0.0.1:8080", "IP port to listen on")
-	cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
-	//	logOnStdout = flag.Bool("s", false, "Send log file to standard otput")
-	//	verboseFlag = flag.Int("v", 0, "Verbose, Higher number gives more");
-
-	logFileName        = "worldserver.log"
-	logLevel           = logger.DEBUG
-	maxFileCount int32 = 1024;
-	maxFileSize  int64 = 1024*10;
+	//ipPort      = flag.String("i", "127.0.0.1:8080", "IP port to listen on")
+	cpuprofile  = flag.String("cpuprofile", "", "write cpu profile to file")
+	logFileName        = "worldserver"
+	LogLevel           = DEBUG                  //日志等级(默认等级)
+	GC_INTERVAL int64  = 300 					// voluntary GC interval
 
 	DbConn *DbMysql
 	WorldRunning = true
 )
 
 func main() {
+	//开启日志功能
+	logPathFile := fmt.Sprintf("log/%s_%s.log", logFileName,time.Now().Format("20140101150405"))
+	logFile, err := os.OpenFile(logPathFile, os.O_CREATE | os.O_RDWR | os.O_APPEND, 0666)
+	if (err != nil) {
+		return
+	}
+	log.SetOutput(logFile)
+	//log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+	defer logFile.Close()
+
 	flag.Parse()
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	initConfig()
 
-
-	//	if !*logOnStdout {
-	//		logFile, _ := os.OpenFile(*logFileName, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
-	//		log.SetOutput(logFile)
-	//		defer logFile.Close()
-	//	}
-	//	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
-
-
-	//
-	var err error
-	//	DbConn, err = DbInit();
-	DbInit();
+	//var err error
+	DbConn, err = DbInit();
 	if (err != nil) {
-		logger.Error("Start DbInit is failure ", err);
+		LogError("Start DbInit is failure ", err);
 		os.Exit(1)
 	}
 	InitConnection();
-	logger.Info("InitConnection succes.... ");
+	LogInfo("InitConnection succes.... ");
 
-	RegistCmd(); //注册指令集
-	logger.Info("RegistCmd succes.... ");
+	//RegistCmd(); //注册指令集
+	//LogInfo("RegistCmd succes.... ");
+
+	InitGlobalUser()
 
 	nResult := StartListen()
 	if nResult != nil {        //启动服务错误
-		logger.Error("StartListen is failure =\n", nResult);
+		LogError("StartListen is failure =\n", nResult);
 		os.Exit(1)
 	}
-	logger.Info("StartListen succes.... ", *ipPort);
+	LogInfo("StartListen succes.... ");
 
 	//主线程更新
 	go mainFrameUpdate();
 
-	//控制台指令
-	mainConsole();
-
-
-	mainClose();
-}
-
-func mainConsole() {
-	reader := bufio.NewReader(os.Stdin)
-	for WorldRunning {
-		data, _, _ := reader.ReadLine()
-		command := string(data)
-		//log.Println("command", command,",a1= ",a1,",a2= ",a2)
-		if command == "stop" {
-			WorldRunning = false
-			break;
-		}
-		time.Sleep(time.Second)
-	}
+	//等待系统指令
+	SignalProc();
 }
 
 //主线程更新
 func mainFrameUpdate() {
-	var (
-		startTime int = 0
-		endTime int   = 0
-		timeout int   = 0
-	)
-
+	start := time.Now()
+	elapsed := time.Now().Sub(start)
 	for {
-		startTime = time.Now().Nanosecond()
+		start = time.Now()
 		//更新涵数
 
 
-		//超时记录
-		endTime = time.Now().Nanosecond()
-		timeout = endTime - startTime
-		if (timeout > MainFrameUpdate*2) {
-			logger.Info("mainFrameUpdate is Timeout[", MainFrameUpdate, "], from [", startTime, "] to [", endTime, "],timeout=", timeout)
+		elapsed = time.Now().Sub(start)
+		if elapsed > MainFrameUpdate*2 {
+			LogInfo("mainFrameUpdate is Timeout[", MainFrameUpdate, "], elapsed=", elapsed, ", DateTime =",time.Now())
 		}
+
+		//gc处理
+		//helper.SysRoutine()
 		time.Sleep((MainFrameUpdate))
 		//有退出标记，退出主线程
 		if !WorldRunning {
 			break
 		}
 	}
-	logger.Error("Start world server stop ......\n")
+	LogError("Start world server stop ......\n")
 }
 
 //正常退出
-func mainClose() {
+func ServerTerminate() {
 	if !WorldRunning {
+		WorldRunning = false;
+		time.Sleep(1e10*60)	//1分钟后关闭
+
+		//下面进行些关闭操作
 		CloseConnection();
 		//DbClose(DbConn);
 	}
 }
 
-//加载配置
-func initConfig() {
 
-	logger.SetConsole(false)
-	logger.SetRollingFile("log", logFileName, maxFileCount, maxFileSize, logger.KB)
-	logger.SetLevel(logLevel)
-
-	common.LoadConfig(ConfigFile)
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
-		if err != nil {
-			logger.Error(err)
-		}
-		defer f.Close()
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
-	}
-}
